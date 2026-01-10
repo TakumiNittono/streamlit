@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Streamlit
+.streamlit/
+
+# Chroma DB
+chroma_db/
+
+# アップロードされたファイル
+docs/*
+!docs/.gitkeep
+
+# 一時ファイル
+tmp/*
+!tmp/.gitkeep
+
+# 環境変数
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
