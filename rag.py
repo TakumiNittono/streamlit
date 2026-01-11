@@ -2,11 +2,16 @@
 RAG検索とLLM回答生成のロジック
 """
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 try:
-    from langchain_community.vectorstores import Chroma
+    from langchain_postgres import PGVector
 except ImportError:
-    from langchain.vectorstores import Chroma
+    # フォールバック: Chroma DBを使用（ローカル開発用）
+    try:
+        from langchain_community.vectorstores import Chroma
+    except ImportError:
+        from langchain.vectorstores import Chroma
+    PGVector = None
 try:
     from langchain_openai import OpenAIEmbeddings
 except ImportError:
@@ -26,11 +31,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 定数定義
-# 絶対パスを使用して確実に動作するようにする
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHROMA_DB_PATH = os.path.join(BASE_DIR, "chroma_db")
 EMBEDDING_MODEL = "text-embedding-3-small"
 K_SEARCH_RESULTS = 4
+COLLECTION_NAME = "rag_documents"
+
+# データベース設定（Supabase優先、フォールバックでChroma DB）
+USE_SUPABASE = bool(os.getenv("DATABASE_URL"))
 
 # プロンプトテンプレート
 PROMPT_TEMPLATE = """あなたは業務アシスタントです。
@@ -64,26 +72,56 @@ class RAGSystem:
         self._init_openai_client()
     
     def _load_vectorstore(self):
-        """Chroma DBを読み込む"""
-        chroma_path = os.path.abspath(CHROMA_DB_PATH)
-        if os.path.exists(chroma_path) and os.listdir(chroma_path):
+        """ベクトルストアを読み込む（Supabase優先、フォールバックでChroma DB）"""
+        # Supabaseが利用可能な場合
+        if USE_SUPABASE and PGVector:
             try:
-                self.vectorstore = Chroma(
-                    persist_directory=chroma_path,
-                    embedding_function=self.embeddings,
-                    collection_name="rag_documents"
-                )
+                database_url = os.getenv("DATABASE_URL")
+                if database_url:
+                    self.vectorstore = PGVector(
+                        connection=database_url,
+                        embeddings=self.embeddings,  # embedding_functionではなくembeddings
+                        collection_name=COLLECTION_NAME
+                    )
+                    print("✅ Supabase + pgvectorを使用しています")
+                    return
             except Exception as e:
-                print(f"Chroma DBの読み込みエラー: {e}")
-                # コレクション名なしで再試行（後方互換性）
+                print(f"Supabase接続エラー: {e}")
+                print("⚠️ Chroma DBにフォールバックします")
+        
+        # フォールバック: Chroma DBを使用（ローカル開発用）
+        try:
+            from langchain_community.vectorstores import Chroma
+        except ImportError:
+            try:
+                from langchain.vectorstores import Chroma
+            except ImportError:
+                Chroma = None
+        
+        if Chroma:
+            chroma_path = os.path.abspath(CHROMA_DB_PATH)
+            if os.path.exists(chroma_path) and os.listdir(chroma_path):
                 try:
                     self.vectorstore = Chroma(
                         persist_directory=chroma_path,
-                        embedding_function=self.embeddings
+                        embedding_function=self.embeddings,
+                        collection_name=COLLECTION_NAME
                     )
-                except Exception as e2:
-                    print(f"Chroma DBの読み込みエラー（フォールバック）: {e2}")
-                    self.vectorstore = None
+                    print("✅ Chroma DBを使用しています（ローカル）")
+                except Exception as e:
+                    print(f"Chroma DBの読み込みエラー: {e}")
+                    # コレクション名なしで再試行（後方互換性）
+                    try:
+                        self.vectorstore = Chroma(
+                            persist_directory=chroma_path,
+                            embedding_function=self.embeddings
+                        )
+                        print("✅ Chroma DBを使用しています（フォールバック）")
+                    except Exception as e2:
+                        print(f"Chroma DBの読み込みエラー（フォールバック）: {e2}")
+                        self.vectorstore = None
+            else:
+                self.vectorstore = None
         else:
             self.vectorstore = None
     

@@ -18,6 +18,10 @@ try:
 except ImportError:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 try:
+    from langchain_postgres import PGVector
+except ImportError:
+    PGVector = None
+try:
     from langchain_community.vectorstores import Chroma
 except ImportError:
     from langchain.vectorstores import Chroma
@@ -39,9 +43,13 @@ CHROMA_DB_PATH = os.path.join(BASE_DIR, "chroma_db")
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
+COLLECTION_NAME = "rag_documents"
 
 # サポートするファイル拡張子
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
+
+# データベース設定（Supabase優先、フォールバックでChroma DB）
+USE_SUPABASE = bool(os.getenv("DATABASE_URL"))
 
 
 def load_documents(docs_dir: str) -> List[Document]:
@@ -126,22 +134,58 @@ def split_documents(documents: List[Document]) -> List[Document]:
     return chunks
 
 
-def create_vectorstore(chunks: List[Document], persist_directory: str):
+def create_vectorstore(chunks: List[Document], persist_directory: str = None):
     """
-    Chroma DBを作成してベクトルストアに保存
+    ベクトルストアを作成して保存（Supabase優先、フォールバックでChroma DB）
     
     Args:
         chunks: チャンク化されたDocumentリスト
-        persist_directory: Chroma DBの保存ディレクトリ
+        persist_directory: Chroma DBの保存ディレクトリ（Supabase使用時は無視）
     """
-    # 絶対パスに変換
-    persist_directory = os.path.abspath(persist_directory)
+    if not chunks:
+        print("警告: チャンクが空のため、ベクトルストアを作成しませんでした")
+        return
     
     # Embeddingモデルの初期化（OpenAI text-embedding-3-small）
     # APIキーは環境変数から自動的に読み込まれる
     embeddings = OpenAIEmbeddings(
         model=EMBEDDING_MODEL
     )
+    
+    # Supabaseが利用可能な場合
+    if USE_SUPABASE and PGVector:
+        try:
+            database_url = os.getenv("DATABASE_URL")
+            if not database_url:
+                raise ValueError("DATABASE_URL環境変数が設定されていません")
+            
+            print(f"Supabase + pgvectorに保存します...")
+            
+            # Supabaseに保存（既存コレクションは自動的に上書き）
+            # pre_delete_collection=Trueで既存データを削除してから保存
+            vectorstore = PGVector.from_documents(
+                documents=chunks,
+                embedding=embeddings,  # from_documentsではembedding（単数形）
+                connection=database_url,
+                collection_name=COLLECTION_NAME,
+                pre_delete_collection=True  # 既存コレクションを削除してから保存
+            )
+            
+            print(f"✅ Supabase + pgvectorに保存しました")
+            print(f"  {len(chunks)} チャンクを保存しました")
+            return
+            
+        except Exception as e:
+            print(f"Supabase保存エラー: {e}")
+            print("⚠️ Chroma DBにフォールバックします")
+            import traceback
+            traceback.print_exc()
+    
+    # フォールバック: Chroma DBを使用（ローカル開発用）
+    if not Chroma:
+        raise ValueError("Chroma DBも利用できません。SupabaseまたはChroma DBの設定を確認してください")
+    
+    persist_directory = os.path.abspath(persist_directory or CHROMA_DB_PATH)
     
     # 既存のDBを削除（確実に削除するため、複数回試行）
     if os.path.exists(persist_directory):
@@ -261,13 +305,13 @@ def create_vectorstore(chunks: List[Document], persist_directory: str):
         print("警告: チャンクが空のため、Chroma DBを作成しませんでした")
 
 
-def ingest(docs_dir: str = DOCS_DIR, chroma_db_path: str = CHROMA_DB_PATH):
+def ingest(docs_dir: str = DOCS_DIR, chroma_db_path: str = None):
     """
     インデックス処理を実行
     
     Args:
         docs_dir: ドキュメントディレクトリのパス
-        chroma_db_path: Chroma DBの保存パス
+        chroma_db_path: Chroma DBの保存パス（Supabase使用時は無視）
     """
     print("=" * 50)
     print("インデックス処理を開始します...")
