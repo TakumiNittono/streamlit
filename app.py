@@ -48,16 +48,7 @@ def init_rag_system():
 
 
 # ==================== ヘッダー ====================
-col1, col2 = st.columns([5, 1])
-with col1:
-    st.title("💬 RAG Chat")
-with col2:
-    st.write("")
-    st.write("")
-    st.markdown(
-        '<a href="?page=1_ファイル管理" style="text-decoration: none;"><button style="background-color: #262730; border: 1px solid #3a3b45; border-radius: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; color: #fafafa; font-size: 0.9rem;">📁 ファイル</button></a>',
-        unsafe_allow_html=True
-    )
+st.title("💬 RAG Chat")
 
 # RAGシステムの初期化
 init_rag_system()
@@ -138,15 +129,6 @@ with st.sidebar:
                 files.append(file_path.name)
     
     st.metric("📁 ファイル数", len(files))
-    
-    # ステータス情報
-    chroma_exists = os.path.exists(os.path.join(BASE_DIR, "chroma_db")) and os.listdir(os.path.join(BASE_DIR, "chroma_db"))
-    api_key_set = bool(os.getenv("OPENAI_API_KEY"))
-    
-    st.markdown("---")
-    st.markdown("### ステータス")
-    st.markdown(f"🗄️ DB: {'✅' if chroma_exists else '❌'}")
-    st.markdown(f"🔑 API: {'✅' if api_key_set else '❌'}")
     
     st.markdown("---")
     if st.button("🗑️ チャット履歴をクリア"):
