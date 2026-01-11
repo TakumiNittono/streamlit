@@ -26,6 +26,9 @@ tmp/*
 # 環境変数
 .env
 
+# 認証情報
+.auth_users.json
+
 # IDE
 .vscode/
 .idea/

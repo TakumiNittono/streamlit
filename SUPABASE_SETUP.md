@@ -112,9 +112,9 @@ OPENAI_API_KEY=your-openai-api-key
 `.env`ファイルに追加：
 
 ```bash
-SUPABASE_URL=https://ojldyxuhmgqsffgrepwe.supabase.co
-SUPABASE_KEY=sb_publishable_0nLCidUTJkjDR-litDYD4Q_WqSg0l0n
-DATABASE_URL=postgresql://postgres.ojldyxuhmgqsffgrepwe:Takumi1030103@aws-1-us-east-2.pooler.supabase.com:6543/postgres
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-or-publishable-key
+DATABASE_URL=postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
 OPENAI_API_KEY=your-openai-api-key
 ```
 

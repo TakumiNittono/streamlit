@@ -5,6 +5,12 @@ import os
 import streamlit as st
 from pathlib import Path
 from rag import get_rag_system
+from auth import (
+    init_default_user,
+    verify_password,
+    is_authenticated,
+    get_current_user
+)
 
 # 定数定義
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +45,13 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "rag_system" not in st.session_state:
     st.session_state.rag_system = None
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+
+# デフォルトユーザーの初期化
+init_default_user()
 
 
 def init_rag_system():
@@ -47,8 +60,47 @@ def init_rag_system():
         st.session_state.rag_system = get_rag_system()
 
 
+# ==================== 認証チェック ====================
+if not is_authenticated(st.session_state):
+    st.title("🔐 ログイン")
+    st.markdown("---")
+    
+    with st.form("login_form"):
+        email = st.text_input("メールアドレス", placeholder="example@example.com")
+        password = st.text_input("パスワード", type="password", placeholder="パスワードを入力")
+        submit_button = st.form_submit_button("ログイン", type="primary", use_container_width=True)
+        
+        if submit_button:
+            if email and password:
+                if verify_password(email, password):
+                    st.session_state.authenticated = True
+                    st.session_state.user_email = email
+                    st.success("ログインに成功しました！")
+                    st.rerun()
+                else:
+                    st.error("メールアドレスまたはパスワードが正しくありません。")
+            else:
+                st.warning("メールアドレスとパスワードを入力してください。")
+    
+    st.markdown("---")
+    st.info("💡 初回ログイン: 環境変数 `ADMIN_EMAIL` と `ADMIN_PASSWORD` で設定されたアカウントでログインできます。")
+    st.stop()
+
 # ==================== ヘッダー ====================
-st.title("💬 RAG Chat")
+col1, col2 = st.columns([5, 1])
+with col1:
+    st.title("💬 RAG Chat")
+with col2:
+    st.write("")
+    st.write("")
+    current_user = get_current_user(st.session_state)
+    if current_user:
+        st.caption(f"👤 {current_user}")
+    if st.button("🚪 ログアウト", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.user_email = None
+        st.session_state.messages = []
+        st.rerun()
 
 # RAGシステムの初期化
 init_rag_system()
